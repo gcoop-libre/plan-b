@@ -1,0 +1,60 @@
+#!/usr/bin/awk -f
+#
+# This script comes with ABSOLUTELY NO WARRANTY, use at own risk
+# Copyright (C) 2014 Osiris Alejandro Gomez <osiris@gcoop.coop>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+BEGIN {
+  T=0
+  if (length(v) == 0) 
+  {
+    v=1
+  }
+  if (length(s) == 0) 
+  {
+    s=v+1
+  }
+}
+
+{
+  if (length(t) == 0) 
+  {
+    T=$v
+  }
+  else
+  {
+    T=t
+  }
+  V=$v
+  S=$s
+  L=length(t)
+ 
+  P=V/T*100
+  A+=P
+  R=int(int(P+0.5)/4)
+  J=sprintf("%s", L)
+
+  #printf "%8s ", V
+  printf "%6.2f %s ", P, "%"
+  BAR=sprintf("%*s", R, "")
+  gsub(/ /, "█", BAR)
+
+  if (R<1) 
+  {
+    BAR="▌"
+  }
+
+  printf "%s %s \n", BAR, S
+}

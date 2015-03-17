@@ -1,0 +1,318 @@
+#!/bin/bash
+
+# This script comes with ABSOLUTELY NO WARRANTY, use at own risk
+# Copyright (C) 2014 Osiris Alejandro Gomez <osiris@gcoop.coop>
+
+# Based in ezdump
+# http://wiki.openvz.org/Backup_a_running_container_over_the_network_with_ezdump
+# Copyright (C) 2008 Alex Lance (alla at cyber.com.au)
+# Sponsored by Silverband Pty. Ltd. 
+ 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at
+# your option) any later version.
+ 
+# This program is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied
+# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+# PURPOSE. See the GNU General Public License for more details:
+# http://www.gnu.org/licenses/gpl.txt
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any
+# later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+BAK_DIR=/bak
+LOCAL_DIR=$BAK_DIR/bzdump
+LOCAL_HOST=`hostname`
+ERR=$BAK_DIR/bz-remote.error
+EXCLUDE_VEIDS=''
+FIND_DIR='find -maxdepth 1 -type d'
+LOG=$BAK_DIR/bz-remote.log
+MAIL_TO='root@localhost'
+ONLY_VEIDS=''
+OVEIDS='.only_veids.tmp'
+REMOTE_DIR=/mnt/plan-b/$LOCAL_HOST/bzdump
+REMOTE_HOST=backup
+REMOTE_PORT=''
+REMOTE_SUDO=0
+RSYNC_BIN=/usr/bin/rsync
+RSYNC_LIMIT_MAX='--bwlimit 4000'
+RSYNC_LIMIT_MIN='--bwlimit 1000'
+SEND_MAIL=0
+SSH=ssh
+TAR_BIN=/bin/tar
+TMP=/tmp/bz-remote.tmp
+UNLIMIT=0
+VERBOSE=0
+XVEIDS='.exclude_veids.tmp'
+
+MONTH=`date +%b`
+N=yesterday
+NOW=`date +%F_%H-%M`
+TODAY=`date +%F`
+WEEKDAY=`date +%a`
+YEAR=`date +%Y`
+YESTERDAY=`date --date="yesterday" +%a`
+
+function e {
+  TIMESTAMP=`date "+%F %T"`
+  MSG="$TIMESTAMP $LOCAL_HOST $REMOTE_HOST $1"
+  [[ $VERBOSE -eq 1 ]] && echo "$MSG"
+  echo -e "$MSG" >> $LOG
+}
+
+function die {
+  e "ERROR: $1" >&2 >>$LOG
+  exit 1
+}
+
+[ ! -d "${LOCAL_DIR}" ]  && die "\$LOCAL_DIR doesn't exist"
+
+while getopts "h:l:m:n:o:p:suvx:" OPTION
+do
+  case $OPTION in
+    h)
+      REMOTE_HOST=$OPTARG
+    ;;
+    l)
+      RSYNC_LIMIT_MIN='--bwlimit '$OPTARG
+      RSYNC_LIMIT_MAX='--bwlimit '$OPTARG
+    ;;
+    m)
+      MAIL_TO=$OPTARG
+      SEND_MAIL=1
+    ;;
+    n)
+      N=$OPTARG
+    ;;
+    o)
+      ONLY_VEIDS=$OPTARG
+    ;;
+    p)
+      REMOTE_PORT=$OPTARG
+    ;;
+    s)
+      REMOTE_SUDO=1
+    ;;
+    u)
+      UNLIMIT=1
+    ;;
+    v)
+      VERBOSE=1
+    ;;
+    x)
+      EXCLUDE_VEIDS=$OPTARG
+    ;;
+  esac
+done
+
+if [ $REMOTE_SUDO -eq 1 ]
+then
+    RSUDO='sudo'
+else
+    RSUDO=''
+fi
+
+RSYNC_AFTER="--delete-after"
+RSYNC_EXCLUDED="--delete-excluded"
+RSYNC_PATH="$RSUDO rsync"
+RSYNC_OPTIONS="-raH $RSYNC_AFTER $RSYNC_EXCLUDED --rsync-path='$RSYNC_PATH'"
+
+case $N in
+  now)
+    NAME=$NOW
+    ;;
+  today)
+    NAME=$TODAY
+    ;;
+  weekday)
+    NAME=$WEEKDAY
+    ;;
+  yesterday)
+    NAME=$YESTERDAY
+    ;;
+  month)
+    NAME=$MONTH
+    ;;
+esac
+
+[[ -z $NAME ]] && exit 1
+
+if [ -z "$REMOTE_PORT" ]
+then
+  SSH_REMOTE=$SSH' '$REMOTE_HOST
+  RSYNC_SSH="-e 'ssh'"
+else
+  SSH_REMOTE=$SSH' -p '$REMOTE_PORT' '$REMOTE_HOST
+  RSYNC_SSH="-e 'ssh -p ${REMOTE_PORT}'"
+fi
+
+echo $EXCLUDE_VEIDS | tr " " "\n" | egrep "^[0-9]{3}" | sort -u >$XVEIDS
+echo $ONLY_VEIDS | tr " " "\n" | egrep "^[0-9]{3}" | sort -u >$OVEIDS
+DIRS=`cd $LOCAL_DIR && $FIND_DIR | cut -c 3- | egrep "^[0-9]{3}"`
+
+if [ -z "$ONLY_VEIDS" ]
+then
+  VEIDS=`echo "$DIRS" | tr " " "\n" | sort | grep -v -f $XVEIDS`
+  e "exclude VMs $EXCLUDE_VEIDS"
+else
+  VEIDS=`echo "$DIRS" | tr " " "\n" | sort | grep -f $OVEIDS`
+fi
+
+IDS=`echo "$VEIDS" | tr "\n" " "`
+
+e "start bz-remote $NAME from $LOCAL_HOST for VMs $IDS"
+
+TOTAL_START=`date +%s`
+RSYNC_EXISTS=`$SSH_REMOTE "test -e $RSYNC_BIN;echo $?"`
+
+if [ "$RSYNC_EXISTS" -ne 0 ]
+then
+  TOTAL_END=`date +%s`
+  TOTAL_TOTAL=`expr $TOTAL_END - $TOTAL_START`
+  MAIL_SUBJECT="bz-remote $LOCAL_HOST in $TOTAL_TOTAL seconds ERROR"
+  echo "ERROR RSYNC NOT FOUND" > $TMP
+  if [ $SEND_MAIL -eq 1 ]
+  then
+    mail "$MAIL_TO" -s "$MAIL_SUBJECT" < $TMP
+  fi
+  exit 1
+fi
+
+REMOTE_DIR_EXISTS=`$SSH_REMOTE "test -d $REMOTE_DIR;echo \$?"`
+
+if [ "$REMOTE_DIR_EXISTS" -ne 0 ]
+then
+  TOTAL_END=`date +%s`
+  TOTAL_TOTAL=`expr $TOTAL_END - $TOTAL_START`
+  MAIL_SUBJECT="bz-remote $LOCAL_HOST in $TOTAL_TOTAL seconds ERROR"
+  echo "ERROR REMOTE DIR NOT FOUND" >$TMP
+  if [ $SEND_MAIL -eq 1 ]
+  then
+    mail $MAIL_TO -s "$MAIL_SUBJECT" < $TMP
+  fi
+  exit 1
+fi
+
+M=10
+
+for VEID in $VEIDS
+do
+  LOCAL_VEID=${LOCAL_DIR}/${VEID}
+  REMOTE_VEID=${REMOTE_DIR}/${VEID}
+  REMOTE_MD5=${REMOTE_DIR}'/md5.log'
+  RSYNC_EXCLUDE='--exclude='$VEID'/usr/portage --exclude='$VEID'/no-backup'
+  RSYNC_LOG='--log-file='$BAK_DIR'/bz-remote-rsync-'$VEID'.log'
+  RSYNC_OPTIONS=$RSYNC_OPTIONS' '$RSYNC_LOG
+  RSYNC_REMOTE=${REMOTE_HOST}:${REMOTE_VEID}/
+  HOUR=`date +%-H`
+
+  if [ $UNLIMIT -eq 0 ]
+  then
+      if [ $HOUR -gt 7 ] && [ $HOUR -lt 24 ]; then
+          RSYNC_LIMIT=$RSYNC_LIMIT_MIN
+      else
+          RSYNC_LIMIT=$RSYNC_LIMIT_MAX
+      fi
+  else
+      RSYNC_LIMIT=''
+  fi
+
+  e "$VEID start rsync"
+  RSYNC_START=`date +%s`
+
+  if [ $VERBOSE -eq 1 ]
+  then
+    RSYNC_OPTIONS=$RSYNC_OPTIONS' -P '
+  fi
+
+  RSYNC="$RSYNC_BIN $RSYNC_LIMIT $RSYNC_SSH $RSYNC_OPTIONS $RSYNC_EXCLUDE"
+  
+  if [ $VERBOSE -eq 1 ]
+  then
+      echo "$RSYNC ${LOCAL_VEID}/ $RSYNC_REMOTE"
+  fi
+
+  echo "$RSYNC ${LOCAL_VEID}/ $RSYNC_REMOTE" | bash 2>>$ERR
+  OK=`echo $?`
+  RSYNC_END=`date +%s`
+  RSYNC_TOTAL=`expr $RSYNC_END - $RSYNC_START`
+  e "$VEID total rsync: $RSYNC_TOTAL"
+
+  I=`echo $VEID | cut -c 2-3`
+  M=$[$M+$I+20]
+
+  if [ $OK -eq 0 ]
+  then
+    REMOTE_TAR=${REMOTE_VEID}-${NAME}.tar.gz 
+    REMOTE_TAR_TMP=$REMOTE_TAR.tmp
+    TAR_REMOTE_VEID="--numeric-owner -C ${REMOTE_VEID} ./"
+    TAR="$RSUDO $TAR_BIN czf $REMOTE_TAR_TMP $TAR_REMOTE_VEID"
+    TAR=$TAR" && $RSUDO mv $REMOTE_TAR_TMP $REMOTE_TAR"
+    TAR_LOG=$REMOTE_DIR/$VEID.log
+
+    TAR_TMP=/tmp/bz-remote-$VEID-tar.sh
+    e "$VEID generate script: $TAR_TMP"
+    echo "#!/bin/bash" >$TAR_TMP
+
+    DAY=`date +%-d`
+    MOD=$[ $DAY % 8 ]
+    TOMORROW=`date -d +1day +%d`
+
+    if [ $MOD -eq 0 ]
+    then
+        e "$VEID copy old tar weekday to month"
+        TAR_MONTH="${REMOTE_DIR}/${VEID}-${YEAR}-${MONTH}.tar.gz"
+        echo "$RSUDO cp $REMOTE_TAR $TAR_MONTH" >>$TAR_TMP
+        echo "$RSUDO md5sum $TAR_MONTH >> $REMOTE_MD5" >>$TAR_TMP
+    fi
+
+    echo "$TAR >$TAR_LOG 2>&1" >>$TAR_TMP
+
+    if [ $TOMORROW -eq 1 ]
+    then
+        e "$VEID copy new tar weekday to month"
+        TAR_MONTH="${REMOTE_DIR}/${VEID}-${YEAR}-${MONTH}.tar.gz"
+        echo "$RSUDO cp $REMOTE_TAR $TAR_MONTH" >>$TAR_TMP
+        echo "$RSUDO md5sum $TAR_MONTH >> $REMOTE_MD5" >>$TAR_TMP
+    fi
+
+    echo "$RSUDO md5sum $REMOTE_TAR >> $REMOTE_MD5" >>$TAR_TMP
+    chmod +x $TAR_TMP
+
+    e "$VEID copy script: $TAR_TMP"
+    $RSYNC_BIN $RSYNC_SSH $TAR_TMP $REMOTE_HOST:$TAR_TMP 
+
+    e "$VEID start tar background in $M minutes"
+    $SSH_REMOTE "$RSUDO at now +${M}minute -m -f $TAR_TMP"
+  else
+    e "$VEID rsync error"
+  fi
+done
+
+e "end bz-remote $NAME from $LOCAL_HOST for VMs $IDS"
+
+TOTAL_END=`date +%s`
+TOTAL_TOTAL=`expr $TOTAL_END - $TOTAL_START`
+MAIL_SUBJECT="$NOW bz-remote $LOCAL_HOST in $TOTAL_TOTAL seconds"
+e "total time: $TOTAL_TOTAL"
+grep "$TODAY.*total rsync: " $LOG | cut -d' ' -f8,5 | barra  > $TMP
+e "" >$TMP
+
+$SSH_REMOTE "bz-du -d $REMOTE_DIR" >>$TMP
+if [ $SEND_MAIL -eq 1 ]
+then
+  mail "$MAIL_TO" -s "$MAIL_SUBJECT" < $TMP
+fi
+

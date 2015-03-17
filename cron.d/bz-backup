@@ -1,0 +1,9 @@
+     SHELL=/bin/bash
+     LANG=es_AR.UTF-8
+     LANGUAGE=es_AR.UTF-8
+     LC_CTYPE="es_AR.UTF-8"
+     PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+     0 0 * * *   root bz-local -m root@localhost -u
+     0 3 * * *   root bz-remote -n yesterday -h backup-hostname -s -m root@localhost
+     0 1 * * 7   root vzdump --quiet --mode stop --storage bak --maxfiles 4 --mailto root@localhost --all

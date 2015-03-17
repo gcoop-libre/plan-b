@@ -1,0 +1,181 @@
+#+TITLE:     Plan B
+#+AUTHOR:    Osiris Alejandro Gómez
+#+EMAIL:     osiris@gcoop.coop
+#+LANGUAGE:  en
+
+** Overview
+
+   Backup a running OpenVZ container local and over the network,
+   forked from ezvzdump:
+
+   #+BEGIN_ASCII
+     https://openvz.org/Backup_a_running_container_over_the_network_with_ezvzdump
+     Copyright (C) 2008 Alex Lance (alla at cyber.com.au) Sponsored by
+     Silverband Pty. Ltd.
+   #+END_ASCII
+
+** License
+
+   This program is free software: you can redistribute it and/or
+   modify it under the terms of the GNU General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or any later version.
+
+** Usage
+
+   Define your cronjob:
+
+   #+BEGIN_EXAMPLE
+     SHELL=/bin/bash
+     LANG=es_AR.UTF-8
+     LANGUAGE=es_AR.UTF-8
+     LC_CTYPE="es_AR.UTF-8"
+     PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+     0 0 * * *   root bz-local -m root@localhost -u
+     0 3 * * *   root bz-remote -n yesterday -h backup-hostname -s -m root@localhost
+     0 1 * * 7   root vzdump --quiet --mode stop --storage bak --maxfiles 4 --mailto root@localhost --all
+   #+END_EXAMPLE
+
+** Tools
+*** =bz-du=
+
+    Visualize size of all backups of bz-remote:
+
+    #+BEGIN_EXAMPLE
+      # bz-du -d /bak/bzdump
+
+      Hostname         : localhost
+      Directory        : /mnt/plan-b/localhost/bzdump
+      Total Files      :      142
+
+                        lun |             mar |             mie |             jue |             vie |             sab |             dom |           total
+      ---------------------------------------------------------------------------------------------------------------------------------------------------------
+      100 | 24 feb    25 GB | 25 feb    25 GB | 26 feb    25 GB | 27 feb    25 GB | 21 feb    25 GB | 15 mar    20 GB | 16 mar    20 GB |      165 GB  40.36 % ██████████
+      101 | 17 mar   590 MB | 25 feb   590 MB | 26 feb   590 MB | 27 feb   590 MB | 21 feb   590 MB | 15 mar   590 MB | 16 mar   590 MB |        4 GB   0.99 % ▌
+      102 | 17 mar   590 MB | 25 feb   590 MB | 26 feb   590 MB | 27 feb   590 MB | 21 feb   590 MB | 15 mar   590 MB | 16 mar   590 MB |        4 GB   0.99 % ▌
+      103 | 17 mar   590 MB | 25 feb   590 MB | 26 feb   590 MB | 27 feb   590 MB | 21 feb   590 MB | 15 mar   590 MB | 16 mar   590 MB |        4 GB   0.99 % ▌
+      104 | 17 mar   356 MB | 25 feb   356 MB | 26 feb   356 MB | 27 feb   356 MB | 21 feb   356 MB | 15 mar   356 MB | 16 mar   356 MB |        2 GB   0.59 % ▌
+      105 | 17 mar   503 MB | 25 feb   477 MB | 26 feb   478 MB | 27 feb   478 MB | 21 feb   353 MB | 15 mar   504 MB | 16 mar   502 MB |        3 GB   0.79 % ▌
+      112 | 17 mar     1 GB | 25 feb     1 GB | 26 feb     1 GB | 27 feb     1 GB | 21 feb     1 GB | 15 mar     1 GB | 16 mar     1 GB |       10 GB   2.46 % ▌
+      118 | 17 mar     3 GB | 25 feb     3 GB | 26 feb     3 GB | 27 feb     3 GB | 21 feb     3 GB | 15 mar     3 GB | 16 mar     3 GB |       26 GB   6.47 % █
+      122 | 17 mar     2 GB | 25 feb     2 GB | 26 feb     2 GB | 27 feb     2 GB | 21 feb     1 GB | 15 mar     2 GB | 16 mar     2 GB |       14 GB   3.49 % ▌
+      132 | 17 mar   787 MB | 25 feb   787 MB | 26 feb   787 MB | 27 feb   787 MB | 21 feb   787 MB | 15 mar   787 MB | 16 mar   787 MB |        5 GB   1.31 % ▌
+      143 | 17 mar     4 GB | 25 feb     4 GB | 26 feb     4 GB | 27 feb     4 GB | 21 feb     4 GB | 15 mar     4 GB | 16 mar     4 GB |       31 GB   7.61 % ██
+      191 | 17 mar   479 MB | 25 feb   478 MB | 26 feb   478 MB | 27 feb   478 MB | 21 feb   478 MB | 15 mar   478 MB | 16 mar   478 MB |        3 GB   0.80 % ▌
+      197 | 24 feb     3 GB | 25 feb     3 GB | 26 feb     3 GB | 27 feb     3 GB | 21 feb     3 GB | 15 mar     3 GB | 16 mar     3 GB |       22 GB   5.60 % █
+      201 |                 |                 |                 |                 |                 |                 |                 |        0 GB   0.00 % ▌
+      ---------------------------------------------------------------------------------------------------------------------------------------------------------
+                      43 GB |           43 GB |           43 GB |           43 GB |           43 GB |           38 GB |           38 GB |      296 GB   8.08 % ██
+
+
+               ene      feb      mar      abr      may      jun      jul      ago      sep      oct      nov      dic    total
+      ---------------------------------------------------------------------------------------------------------------------------------------------------------
+      100     9 GB     8 GB    25 GB                                                                                        43 GB  10.64 % ██
+      101   590 MB   590 MB   590 MB                                                                                         1 GB   0.42 % ▌
+      102   590 MB   590 MB   590 MB                                                                                         1 GB   0.42 % ▌
+      103   590 MB   590 MB   590 MB                                                                                         1 GB   0.42 % ▌
+      104   356 MB   356 MB   356 MB                                                                                         1 GB   0.25 % ▌
+      105   342 MB   343 MB   478 MB                                                                                         1 GB   0.28 % ▌
+      112     1 GB   500 MB     1 GB                                                                                         3 GB   0.82 % ▌
+      118     3 GB    65 MB     3 GB                                                                                         7 GB   1.86 % ▌
+      122     1 GB     1 GB     1 GB                                                                                         5 GB   1.32 % ▌
+      132   787 MB   787 MB   787 MB                                                                                         2 GB   0.56 % ▌
+      143     1 GB     4 GB     4 GB                                                                                        10 GB   2.62 % ▌
+      191   478 MB   478 MB   478 MB                                                                                         1 GB   0.34 % ▌
+      197     3 GB     3 GB     3 GB                                                                                         9 GB   2.39 % ▌
+      201                                                                                                                    0 GB   0.00 % ▌
+      ---------------------------------------------------------------------------------------------------------------------------------------------------------
+             25 GB    22 GB    44 GB                                                                                        91 GB   2.49 % ▌
+
+      Average VM Size  :        2 GB
+      Total Disk Size  :     3667 GB
+      Total Dump Days  :      296 GB   8.08 % ██
+      Total Dump Month :       91 GB   2.49 % ▌
+      Total Dump Used  :      387 GB  10.58 % ██
+      Total Disk Free  :      652 GB  17.80 % ████
+    #+END_EXAMPLE
+
+*** =vz-du=
+
+    Visualize size of all backups of vzdump:
+
+    #+BEGIN_EXAMPLE
+      # vz-du -d /bak/vzdump
+
+      Hostname     : localhost
+      Directory    : /bak/vzdump
+      Total Files  :   56
+      Total OpenVZ :   52
+      Total QEMU   :    4
+
+             02/22    03/01    03/08    03/15    total
+      100    85 GB    85 GB    62 GB    61 GB      295 GB  59.59 % ███████████████
+      101              1 GB   591 MB     1 GB        4 GB   0.83 % ▌
+      102              1 GB   591 MB     1 GB        4 GB   0.83 % ▌
+      103              1 GB   591 MB     1 GB        4 GB   0.83 % ▌
+      104            917 MB   355 MB   917 MB        2 GB   0.43 % ▌
+      105              1 GB   477 MB     1 GB        3 GB   0.73 % ▌
+      112              2 GB     1 GB     2 GB        6 GB   1.36 % ▌
+      118              5 GB     3 GB     5 GB       15 GB   3.18 % ▌
+      122              4 GB     2 GB     4 GB       11 GB   2.29 % ▌
+      132              1 GB   786 MB     1 GB        3 GB   0.75 % ▌
+      135              6 GB     2 GB     6 GB       15 GB   3.05 % ▌
+      143             17 GB     4 GB    17 GB       38 GB   7.81 % ██
+      191              3 GB   499 MB     3 GB        6 GB   1.39 % ▌
+      197             10 GB     3 GB    10 GB       24 GB   4.96 % █
+
+      Total Disk Size :     1833 GB
+      Total Dump Used :      436 GB  23.79 % ██████
+      Total OVZ  Used :      474 GB  25.87 % ██████
+      Total QEMU Used :       21 GB   1.17 % ▌
+      Total Disk Free :      377 GB  20.58 % █████
+    #+END_EXAMPLE
+
+*** =vz-rm=
+
+    Verify which backups can be removed, and remove with =-D=
+    parameter:
+
+    #+BEGIN_EXAMPLE
+      # vz-rm -d /bak/vzdump
+
+      hostname  : localhost
+      directory : /bak/vzdump
+      total VMs :  56  495 GB
+      total OK  :  15  207 GB  41.82 % ██████████
+      total RM  :  41  288 GB  58.18 % ██████████████
+      disk free : 378G
+
+      VMs to preserve
+      100 02/22 03/15
+      101 03/15
+      102 03/15
+      103 03/15
+      104 03/15
+      105 03/15
+      112 03/15
+      118 03/15
+      122 03/15
+      132 03/15
+      135 03/15
+      143 03/15
+      191 03/15
+      197 03/15
+
+      VMs to delete
+      100 03/01 03/08
+      101 03/01 03/08 03/08
+      102 03/01 03/08 03/08
+      103 03/01 03/08 03/08
+      104 03/01 03/08 03/08
+      105 03/01 03/08 03/08
+      112 03/01 03/08 03/08
+      118 03/01 03/08 03/08
+      122 03/01 03/08 03/08
+      132 03/01 03/08 03/08
+      135 03/01 03/08 03/08
+      143 03/01 03/08 03/08
+      191 03/01 03/08 03/08
+      197 03/01 03/08 03/08
+    #+END_EXAMPLE

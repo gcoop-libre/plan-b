@@ -1,0 +1,391 @@
+#!/bin/bash
+
+# This script comes with ABSOLUTELY NO WARRANTY, use at own risk
+# Copyright (C) 2014 Osiris Alejandro Gomez <osiris@gcoop.coop>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+ONLY_SUMMARY=0
+VERBOSE=0
+DIR=$PWD
+DELETE=1
+
+while getopts "d:f:sv" OPTION
+do
+  case $OPTION in
+    d)
+      DIR=`echo "$OPTARG" | sed 's/\/\+$//g'`
+    ;;
+    f)
+      FILE="$OPTARG"
+    ;;
+    s)
+      ONLY_SUMMARY=1
+    ;;
+    v)
+      VERBOSE=1
+    ;;
+  esac
+done
+
+[ ! -d "$DIR" ] && exit 1
+
+cd $DIR
+
+hr()
+{
+    printf '%.0s-' {1..153}; echo
+}
+
+if [ -z "$FILE" ]
+then
+  TMP=/tmp/bz-du-$BASHPID.tmp
+  ls -l *.tar.gz 2>/dev/null > $TMP
+else
+  if [ -e "$FILE" ]
+  then
+      TMP="$FILE"
+      DELETE=0
+  else
+      exit 1
+  fi
+fi
+
+TOTAL_TAR=`wc -l $TMP | awk '{print $1}'`
+
+TOTAL_MB=`egrep "[0-9]{3}-[a-z]{3}.tar.gz" $TMP | awk '{print $5}' | awk '{S+=$1/1024/1024} END {printf "%0d\n",S}'`
+
+printf "\n"
+printf "Hostname         : %s\n" "`hostname`"
+printf "Directory        : %s\n" "$DIR"
+printf "Total Files      : %8s\n" "$TOTAL_TAR"
+
+[[ $TOTAL_TAR -eq 0 ]] && exit 1
+
+DF=`df -m -P "$DIR" | tail -1`
+TOTAL_DISK=`df -m $DIR | tail -n +2 | head -1 | awk '{print $2}'`
+DISK_FREE=`echo "$DF" | awk '{print $4}'`
+
+VEIDS=`cat $TMP | awk '{print $9}' | egrep -o "[0-9]{3}" | sort -u`
+
+YEAR=`date +%Y`
+DAYS=''
+MONTHS=''
+
+for D in {1..7}
+do
+    DAY=`date --date=2014-12-0$D +%a`
+    DAYS=$DAYS' '$DAY
+done
+
+for M in {1..12}
+do
+    MONTH=`date --date=$YEAR-$M-01 +%b`
+    MONTHS=$MONTHS' '$MONTH
+done
+
+if [ $ONLY_SUMMARY -eq 1 ]
+then
+    printf "\n"
+    printf "    "
+    for DAY in $DAYS
+    do
+        printf "%1s" `echo "$DAY" | cut -c -1`
+    done
+    printf " "
+    for MONTH in $MONTHS
+    do
+        printf "%1s" `echo "$MONTH" | cut -c -1`
+    done
+    printf "\n"
+
+    for VEID in $VEIDS
+    do
+        printf "%3s " $VEID
+
+        for DAY in $DAYS
+        do
+            [[ -e $VEID-$DAY.tar.gz ]] && printf "▣" || printf "□"
+        done
+
+        printf " "
+
+        for MONTH in $MONTHS
+        do
+            [[ -e $VEID-$YEAR-$MONTH.tar.gz ]] && printf "▣" || printf "□"
+        done
+        printf "\n"
+    done
+    printf "\n"
+fi
+
+if [ $ONLY_SUMMARY -eq 0 ]
+then
+    printf "\n"
+    printf "      "
+    for DAY in $DAYS
+    do
+      [ $DAY = 'mié' ] && DAY=mie
+      [ $DAY = 'sáb' ] && DAY=sab
+
+      printf "%2s %3s %8s | " "" "" "$DAY"
+    done
+    printf "%2s %3s %8s \n" "" "" "total"
+    hr
+fi
+
+TOTAL_TOTAL=0
+TOTAL_DAYS=0
+TOTAL_MONTHS=0
+
+declare -A TOTAL_DAY
+declare -A TOTAL_MONTH
+
+for VEID in $VEIDS
+do
+    TOTAL_VEID=0
+
+    if [ $ONLY_SUMMARY -eq 0 ]
+    then
+        printf "%s | " $VEID
+    fi
+
+    for DAY in $DAYS
+    do
+        while read p x o g BYTES M D t f
+        do
+            SIZE=' '
+            if [ ! -z $BYTES ]
+            then
+                if [ $BYTES -gt 0 ]
+                then
+                    let "KB = $BYTES / 1024"
+                    let "MB = $KB / 1024"
+                    let "GB = $MB / 1024"
+                    TOTAL_VEID=$[$TOTAL_VEID+$MB]
+                    TOTAL_TOTAL=$[$TOTAL_TOTAL+$MB]
+                    TOTAL_DAY[$DAY]=$[${TOTAL_DAY[$DAY]}+$MB]
+                    TOTAL_DAYS=$[$TOTAL_DAYS+$MB]
+                    SIZE=$MB
+
+                    if [ $MB -gt 1024 ]
+                    then
+                        SIZE=`printf "%5d GB" "$GB"`
+                    else
+                        SIZE=`printf "%5d MB" "$MB"`
+                    fi
+
+                    if [ $MB -eq 0 ]
+                    then
+                        SIZE=' '
+                    fi
+                fi
+            fi
+
+            if [ $ONLY_SUMMARY -eq 0 ]
+            then
+                printf "%2s %3s %8s | " "$D" "$M" "$SIZE"
+            fi
+        done <<< `egrep "$VEID-$DAY" $TMP`
+    done
+
+    if [ $ONLY_SUMMARY -eq 0 ]
+    then
+        TOTAL_VEID_GB=`echo "$TOTAL_VEID" | awk '{printf "%5d",$1/1024}'`
+        BAR=`echo "$TOTAL_VEID" | barrita -v t=$TOTAL_MB`
+        printf "%8s GB %s\n" "$TOTAL_VEID_GB" "$BAR"
+    fi
+done
+
+if [ $ONLY_SUMMARY -eq 0 ]
+then
+    hr
+    printf '      '
+fi
+
+for DAY in $DAYS
+do
+    SIZE=' '
+    MB=${TOTAL_DAY[$DAY]}
+
+    if [ -z $MB ]
+    then
+        SIZE=' '
+    else
+        let "GB = $MB / 1024"
+        SIZE=$MB
+
+        if [ $MB -gt 1024 ]
+        then
+            SIZE=`printf "%5d GB" $GB`
+        else
+            SIZE=`printf "%5d MB" $GB`
+        fi
+
+        if [ $MB -eq 0 ]
+        then
+            SIZE=' '
+        fi
+    fi
+
+    if [ $ONLY_SUMMARY -eq 0 ]
+    then
+        printf "%2s %3s %8s | " " " " " "$SIZE"
+    fi
+done
+
+TOTAL_DAYS_GB=`echo "$TOTAL_DAYS" | awk '{printf "%5d",$1/1024}'`
+BAR=`echo "$TOTAL_DAYS" | barrita -v t=$TOTAL_DISK`
+
+if [ $ONLY_SUMMARY -eq 0 ]
+then
+    printf "%8s GB %s\n" "$TOTAL_DAYS_GB" "$BAR"
+    printf "\n"
+fi
+
+if [ $ONLY_SUMMARY -eq 0 ]
+then
+    printf "\n"
+    printf "    "
+    for MONTH in $MONTHS
+    do
+        printf "%8s " $MONTH
+    done
+    printf "%8s \n" total
+    printf ""
+    hr
+fi
+
+for VEID in $VEIDS
+do
+    TOTAL_VEID=0
+
+    if [ $ONLY_SUMMARY -eq 0 ]
+    then
+        printf "%s " $VEID
+    fi
+
+    for MONTH in $MONTHS
+    do
+        while read p x o g BYTES M D t f
+        do
+            SIZE='        '
+            if [ ! -z $BYTES ]
+            then
+                if [ $BYTES -gt 0 ]
+                then
+                    let "KB = $BYTES / 1024"
+                    let "MB = $KB / 1024"
+                    let "GB = $MB / 1024"
+                    MB=`echo "$BYTES" | awk '{printf "%5d",$1/1024/1024}'`
+                    GB=`echo "$MB" | awk '{printf "%5d",$1/1024}'`
+                    TOTAL_VEID=$[$TOTAL_VEID+$MB]
+                    TOTAL_TOTAL=$[$TOTAL_TOTAL+$MB]
+                    TOTAL_MONTH[$MONTH]=$[${TOTAL_MONTH[$MONTH]}+$MB]
+                    TOTAL_MONTHS=$[$TOTAL_MONTHS+$MB]
+                    SIZE=$MB
+
+                    if [ $MB -gt 1024 ]
+                    then
+                        SIZE=`printf "%5d GB" $GB`
+                    else
+                        SIZE=`printf "%5d MB" $MB`
+                    fi
+
+                    if [ $MB -eq 0 ]
+                    then
+                        SIZE='        '
+                    fi
+                fi
+            fi
+
+            if [ $ONLY_SUMMARY -eq 0 ]
+            then
+                printf "%s " "$SIZE"
+            fi
+        done <<< `egrep $VEID-$YEAR-$MONTH $TMP`
+    done
+
+    if [ $ONLY_SUMMARY -eq 0 ]
+    then
+        TOTAL_VEID_GB=`echo "$TOTAL_VEID" | awk '{printf "%5d",$1/1024}'`
+        BAR=`echo "$TOTAL_VEID" | barrita -v t=$TOTAL_MB`
+        printf "%8s GB %s\n" "$TOTAL_VEID_GB" "$BAR"
+    fi
+done
+
+if [ $ONLY_SUMMARY -eq 0 ]
+then
+    hr
+    printf "    "
+fi
+
+for MONTH in $MONTHS
+do
+    MB=${TOTAL_MONTH[$MONTH]}
+
+    if [ -z $MB ]
+    then
+        SIZE=' '
+    else
+        let "GB = $MB / 1024"
+        SIZE=$MB
+
+        if [ $MB -gt 1024 ]
+        then
+            SIZE=`printf "%5d GB" $GB`
+        else
+            SIZE=`printf "%5d MB" $GB`
+        fi
+
+        if [ $MB -eq 0 ]
+        then
+            SIZE=' '
+        fi
+    fi
+
+    if [ $ONLY_SUMMARY -eq 0 ]
+    then
+        printf "%8s " "$SIZE"
+    fi
+done
+
+TOTAL_MONTHS_GB=`echo "$TOTAL_MONTHS" | awk '{printf "%5d",$1/1024}'`
+BAR=`echo "$TOTAL_MONTHS" | barrita -v t=$TOTAL_DISK`
+
+if [ $ONLY_SUMMARY -eq 0 ]
+then
+    printf "%8s GB %s\n" "$TOTAL_MONTHS_GB" "$BAR"
+    printf "\n"
+fi
+
+TOTAL_DISK_GB=`echo "$TOTAL_DISK" | awk '{printf "%5d",$1/1024}'`
+TOTAL_TOTAL_GB=`echo "$TOTAL_TOTAL" | awk '{printf "%5d",$1/1024}'`
+DISK_FREE_GB=`echo "$DISK_FREE" | awk '{printf "%5d",$1/1024}'`
+BAR_DAYS=`echo "$TOTAL_DAYS" | barrita -v t=$TOTAL_DISK`
+BAR_MONTHS=`echo "$TOTAL_MONTHS" | barrita -v t=$TOTAL_DISK`
+BAR_USED=`echo "$TOTAL_TOTAL" | barrita -v t=$TOTAL_DISK`
+BAR_FREE=`echo "$DISK_FREE" | barrita -v t=$TOTAL_DISK`
+BAR=`echo "$TOTAL_TOTAL" | barrita -v t=$TOTAL_DISK`
+AVERAGE_VM_SIZE=$((TOTAL_TOTAL_GB/TOTAL_TAR))
+
+printf "Average VM Size  : %8s GB %s\n" "$AVERAGE_VM_SIZE"
+printf "Total Disk Size  : %8s GB %s\n" "$TOTAL_DISK_GB"
+printf "Total Dump Days  : %8s GB %s\n" "$TOTAL_DAYS_GB" "$BAR_DAYS"
+printf "Total Dump Month : %8s GB %s\n" "$TOTAL_MONTHS_GB" "$BAR_MONTHS"
+printf "Total Dump Used  : %8s GB %s\n" "$TOTAL_TOTAL_GB" "$BAR_USED"
+printf "Total Disk Free  : %8s GB %s\n" "$DISK_FREE_GB" "$BAR_FREE"
+
+[[ $DELETE -eq 1 ]] && rm "$TMP"
+

@@ -1,0 +1,193 @@
+#!/bin/bash
+
+# This script comes with ABSOLUTELY NO WARRANTY, use at own risk
+# Copyright (C) 2014 Osiris Alejandro Gomez <osiris@gcoop.coop>
+
+# Based in ezdump
+# http://wiki.openvz.org/Backup_a_running_container_over_the_network_with_ezdump
+# Copyright (C) 2008 Alex Lance (alla at cyber.com.au)
+# Sponsored by Silverband Pty. Ltd. 
+ 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at
+# your option) any later version.
+ 
+# This program is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied
+# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+# PURPOSE. See the GNU General Public License for more details:
+# http://www.gnu.org/licenses/gpl.txt
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any
+# later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+LOCAL_DIR='/bak/bzdump/'
+DISK_USE=0
+DUL=$LOCAL_DIR'du.log'
+LOCAL_HOST=`hostname`
+LOG='/bak/bz-local.log'
+MAIL_TO="root@localhost"
+NOW=`date +%F`
+RSYNC_DEFAULT='rsync -raH --delete-after --delete-excluded'
+RSYNC_EXCLUDE='/usr/portage /no-backup'
+SEND_MAIL=0
+TMP='/tmp/bz-local.tmp'
+VEIDS=`vzlist | awk '{print $1}' | egrep '^[0-9]+'`
+VZCTL='vzctl'
+VZ_CONF='/etc/vz/conf/'
+VZ_PRIVATE='/vz/private/'
+
+function e {
+  TIMESTAMP=`date "+%F %T"`
+  MSG="$TIMESTAMP $LOCAL_HOST $REMOTE_HOST $1"
+  [[ $VERBOSE -eq 1 ]] && echo "$MSG"
+  echo -e "$MSG" >> $LOG
+}
+
+function die {
+e "Error: $1" >&2 >>$LOG
+exit 1;
+}
+
+ONLY_VEIDS=''
+EXCLUDE_VEIDS=''
+OVEIDS='.only_veids.tmp'
+XVEIDS='.exclude_veids.tmp'
+
+[ ! -d "${VZ_CONF}" ]    && die "\$VZ_CONF doesn't exist"
+[ ! -d "${VZ_PRIVATE}" ] && die "\$VZ_PRIVATE doesn't exist"
+[ ! -d "${LOCAL_DIR}" ]  && die "\$LOCAL_DIR doesn't exist"
+
+while getopts "m:o:uvx:" OPTION
+do
+  case $OPTION in
+    m)
+      MAIL_TO=$OPTARG
+      SEND_MAIL=1
+    ;;
+    o)
+      ONLY_VEIDS=$OPTARG
+    ;;
+    x)
+      EXCLUDE_VEIDS=$OPTARG
+    ;;
+    u)
+      DISK_USE=1
+    ;;
+    v)
+      VERBOSE=1
+    ;;
+  esac
+done
+
+IDS=`echo $VEIDS | tr "\n" " "`
+e "$LOCAL_HOST - VZ backup for containers $IDS started."
+TOTAL_START=`date +%s`
+
+echo $EXCLUDE_VEIDS | tr " " "\n" | egrep "^[0-9]{3}" | sort -u >$XVEIDS
+echo $ONLY_VEIDS | tr " " "\n" | egrep "^[0-9]{3}" | sort -u >$OVEIDS
+
+if [ -z "$ONLY_VEIDS" ]
+then
+  VEIDS=`echo $VEIDS | tr " " "\n" | sort | grep -v -f $XVEIDS`
+  e "exclude VMs $EXCLUDE_VEIDS"
+else
+  VEIDS=`echo $VEIDS | tr " " "\n" | sort | grep -f $OVEIDS`
+fi
+
+for VEID in $VEIDS
+do
+
+  VEHOSTNAME=`vzlist -o hostname $VEID -H`
+
+  RSYNC="${RSYNC_DEFAULT}"
+  for path in $RSYNC_EXCLUDE
+  do
+    RSYNC+=" --exclude=${VEID}${path}"
+  done;
+
+  [ ! -d "${VZ_PRIVATE}${VEID}" ] && die "\$VZ_PRIVATE\$VEID doesn't exist"
+
+  e "$VEID Start first pass rsync"
+  ${RSYNC} ${VZ_PRIVATE}${VEID} ${LOCAL_DIR}
+
+  # If the VE is running, suspend, re-rsync and then resume it ...
+  if [ -n "`${VZCTL} status ${VEID} | grep running`" ]
+  then
+
+    e "${VEID} Suspending"
+    before=`date +%s`
+    ${VZCTL} chkpnt $VEID --suspend
+
+    OK=`echo $?`
+    [ $OK -ne 0 ] && e "$VEID ERROR chkpnt $VEID --suspend" && continue
+
+    e "${VEID} Start second pass rsync"
+    ${RSYNC} ${VZ_PRIVATE}${VEID} ${LOCAL_DIR}
+
+    e "${VEID} Resuming VEID"
+    ${VZCTL} chkpnt $VEID --resume
+    after=`date +%s`
+    elapsed_seconds=`expr $after - $before`
+
+    e "${VEID} Done."
+    e "${VEID} ($VEHOSTNAME) was down $elapsed_seconds seconds during backup process."
+
+  else
+    e "${VEID} Skipping suspend/re-rsync/resume, is not curently running."
+  fi
+
+  # Copy VE config files over into the VE storage/cache area
+  if [ ! -d "${LOCAL_DIR}${VEID}/etc/vzdump" ]
+  then
+    e "${VEID} Creating directory for openvz config files"
+    mkdir ${LOCAL_DIR}${VEID}/etc/vzdump
+  fi
+
+  e "${VEID} Copying main config file"
+  [ ! -f "${VZ_CONF}${VEID}.conf" ] && die "Unable to find ${VZ_CONF}${VEID}.conf"
+  cp ${VZ_CONF}${VEID}.conf ${LOCAL_DIR}${VEID}/etc/vzdump/vps.conf
+
+  for ext in start stop mount umount
+  do
+    if [ -f "${VZ_CONF}${VEID}.${ext}" ]
+    then
+      e "${VEID} Copying other config file"
+      cp ${VZ_CONF}${VEID}.${ext} ${LOCAL_DIR}${VEID}/etc/vzdump/vps.${ext}
+    fi
+  done
+
+  e "${VEID} Done."
+done
+
+TOTAL_END=`date +%s`
+TOTAL_TOTAL=`expr $TOTAL_END - $TOTAL_START`
+e "$LOCAL_HOST backup for: $IDS complete in: $TOTAL_TOTAL seconds"
+MAIL_SUBJECT="$NOW bz-local $LOCAL_HOST in $TOTAL_TOTAL seconds"
+
+e "total time: $TOTAL_TOTAL"
+
+grep "$NOW" $LOG > $TMP
+
+if [ $DISK_USE -eq 1 ]
+then
+    find $LOCAL_DIR -maxdepth 4 -type f -size +200M -printf "%k %p\n" >$DUL
+    sort -nr "$DUL" | barra >>$TMP
+fi
+
+if [ $SEND_MAIL -eq 1 ]
+then
+    mail "$MAIL_TO" -s "$MAIL_SUBJECT" < $TMP
+fi
+

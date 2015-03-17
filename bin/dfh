@@ -1,0 +1,4 @@
+#!/bin/bash
+
+df -h | egrep -v "(none|private|tmpfs|@)"
+

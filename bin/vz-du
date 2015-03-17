@@ -1,0 +1,151 @@
+#!/bin/bash
+
+# This script comes with ABSOLUTELY NO WARRANTY, use at own risk
+# Copyright (C) 2014 Osiris Alejandro Gomez <osiris@gcoop.coop>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+ONLY_SUMMARY=0
+DIR=$PWD
+
+while getopts "d:s" OPTION
+do
+  case $OPTION in
+    d)
+      DIR=`echo $OPTARG | sed 's/\/\+$//g'`
+    ;;
+    s)
+      ONLY_SUMMARY=1
+    ;;
+  esac
+done
+
+[ ! -d "$DIR" ] && exit 1
+
+cd $DIR
+
+TMP=/tmp/vz-du-$BASHPID.tmp
+
+# EXAMPLE: vzdump-openvz-118-2014_10_18-01_03_08.tar
+PATTERN='vzdump-(openvz|qemu)-[0-9]{3}-[0-9]{4}_[0-9]{2}_[0-9]{2}-[0-9]{2}_[0-9]{2}_[0-9]{2}.(tar|vma|tar.gz)'
+ls -l * 2>/dev/null | egrep "$PATTERN" > $TMP
+
+TOTAL_TAR=`wc -l $TMP | awk '{print $1}'`
+TOTAL_QEMU=`grep qemu $TMP | wc -l | awk '{print $1}'`
+TOTAL_OVZ=`grep openvz $TMP | wc -l | awk '{print $1}'`
+
+[ $TOTAL_TAR -eq 0 ] && exit 0
+
+TOTAL_MB=`cat $TMP | awk '{print $5}' | awk '{S+=$1/1024/1024} END {printf "%0d\n",S}'`
+TOTAL_OVZ_MB=`grep openvz $TMP | awk '{print $5}' | awk '{S+=$1/1024/1024} END {printf "%0d\n",S}'`
+TOTAL_QEMU_MB=`grep qemu $TMP | awk '{print $5}' | awk '{S+=$1/1024/1024} END {printf "%0d\n",S}'`
+
+printf "\n"
+printf "Hostname     : %s\n" `hostname`
+printf "Directory    : $DIR\n"
+printf "Total Files  : %4s\n" "$TOTAL_TAR"
+printf "Total OpenVZ : %4s\n" "$TOTAL_OVZ"
+printf "Total QEMU   : %4s\n" "$TOTAL_QEMU"
+printf "\n"
+
+DF=`df -m -P "$DIR" | tail -1`
+TOTAL_DISK=`echo $DF | awk '{print $2}'`
+DISK_FREE=`echo $DF | awk '{print $4}'`
+
+VEIDS=`cat $TMP | awk '{print $9}' | egrep -o "\-[0-9]{3}-" | tr -d '-' | sort -u`
+
+DAYS=`cat $TMP | awk '{print $9}' | egrep -o "[0-9]{4}_[0-9]{2}_[0-9]{2}" | sort -u`
+MONTHS=`cat $TMP | awk '{print $9}' | egrep -o "[0-9]{4}_[0-9]{2}" | sort -u`
+YEARS=`cat $TMP | awk '{print $9}' | egrep -o "[0-9]{4}" | sort -u`
+
+DAYS=$DAYS
+
+if [ $ONLY_SUMMARY -eq 0 ]
+then
+    printf "    "
+    for DAY in $DAYS
+    do
+      printf "%8s " `echo $DAY | cut -c 6- | tr _ /`
+    done
+    printf "%8s \n" total
+fi
+
+TOTAL_TOTAL=0
+TOTAL_DAYS=`echo $DAYS | tr " " "\n" | wc -l`
+
+for VEID in $VEIDS
+do
+    if [ $ONLY_SUMMARY -eq 0 ]
+    then
+        TOTAL_VEID=0
+        printf "%s " $VEID
+    fi
+
+    for DAY in $DAYS
+    do
+        BYTES=`egrep $VEID-$DAY $TMP | awk '{print $5}'`
+        MB=`echo $BYTES | awk '{printf "%5d",$1/1024/1024}'`
+        GB=`echo $MB | awk '{printf "%5d",$1/1024}'`
+        TOTAL_VEID=$[$TOTAL_VEID+$MB]
+        TOTAL_TOTAL=$[$TOTAL_TOTAL+$MB]
+
+        SIZE=$MB
+
+        if [ $MB -gt 1024 ]
+        then
+            SIZE=`printf "%5d GB" $GB`
+        else
+            SIZE=`printf "%5d MB" $MB`
+        fi
+
+        if [ $MB -eq 0 ]
+        then
+            SIZE='        '
+        fi
+
+        if [ $ONLY_SUMMARY -eq 0 ]
+        then
+            printf "%s " "$SIZE"
+        fi
+
+    done
+
+    if [ $ONLY_SUMMARY -eq 0 ]
+    then
+        TOTAL_VEID_GB=`echo $TOTAL_VEID | awk '{printf "%5d",$1/1024}'`
+        BAR=`echo $TOTAL_VEID | barrita -v t=$TOTAL_MB`
+        printf "%8s GB %s\n" "$TOTAL_VEID_GB" "$BAR"
+    fi
+done
+
+TOTAL_DISK_GB=`echo $TOTAL_DISK | awk '{printf "%5d",$1/1024}'`
+TOTAL_TOTAL_GB=`echo $TOTAL_TOTAL | awk '{printf "%5d",$1/1024}'`
+TOTAL_QEMU_GB=`echo $TOTAL_QEMU_MB | awk '{printf "%5d",$1/1024}'`
+TOTAL_OVZ_GB=`echo $TOTAL_OVZ_MB | awk '{printf "%5d",$1/1024}'`
+DISK_FREE_GB=`echo $DISK_FREE | awk '{printf "%5d",$1/1024}'`
+BAR_USED=`echo $TOTAL_TOTAL | barrita -v t=$TOTAL_DISK`
+BAR_FREE=`echo $DISK_FREE | barrita -v t=$TOTAL_DISK`
+BAR_QEMU=`echo $TOTAL_QEMU_MB | barrita -v t=$TOTAL_DISK`
+BAR_OVZ=`echo $TOTAL_OVZ_MB | barrita -v t=$TOTAL_DISK`
+PAD=$[$TOTAL_DAYS*11]
+ALIGN=`echo "printf '%0.1s' ' '{1..$PAD}" | /bin/bash`
+
+printf "\n"
+printf "Total Disk Size : %8s GB %s\n" "$TOTAL_DISK_GB"
+printf "Total Dump Used : %8s GB %s\n" "$TOTAL_TOTAL_GB" "$BAR_USED"
+printf "Total OVZ  Used : %8s GB %s\n" "$TOTAL_OVZ_GB" "$BAR_OVZ"
+printf "Total QEMU Used : %8s GB %s\n" "$TOTAL_QEMU_GB" "$BAR_QEMU"
+printf "Total Disk Free : %8s GB %s\n" "$DISK_FREE_GB" "$BAR_FREE"
+rm $TMP
+
