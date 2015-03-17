@@ -8,11 +8,12 @@
    Backup a running OpenVZ container local and over the network,
    forked from ezvzdump:
 
-   #+BEGIN_ASCII
+   #+BEGIN_EXAMPLE
+   
      https://openvz.org/Backup_a_running_container_over_the_network_with_ezvzdump
      Copyright (C) 2008 Alex Lance (alla at cyber.com.au) Sponsored by
      Silverband Pty. Ltd.
-   #+END_ASCII
+   #+END_EXAMPLE
 
 ** License
 
