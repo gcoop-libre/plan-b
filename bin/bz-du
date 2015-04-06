@@ -73,8 +73,8 @@ printf "Total Files      : %8s\n" "$TOTAL_TAR"
 
 [[ $TOTAL_TAR -eq 0 ]] && exit 1
 
-DF=`df -m -P "$DIR" | tail -1`
-TOTAL_DISK=`df -m $DIR | tail -n +2 | head -1 | awk '{print $2}'`
+DF=`df -P -m "$DIR" | tail -1`
+TOTAL_DISK=`df -P -m $DIR | tail -n +2 | head -1 | awk '{print $2}'`
 DISK_FREE=`echo "$DF" | awk '{print $4}'`
 
 VEIDS=`cat $TMP | awk '{print $9}' | egrep -o "[0-9]{3}" | sort -u`
@@ -83,30 +83,30 @@ YEAR=`date +%Y`
 DAYS=''
 MONTHS=''
 
-for D in {1..7}
+for d in {1..7}
 do
-    DAY=`date --date=2014-12-0$D +%a`
-    DAYS=$DAYS' '$DAY
+    DAY=`date --date=2014-12-0$d +%a`
+    DAYS[$d]=$DAY
 done
 
-for M in {1..12}
+for m in {1..12}
 do
-    MONTH=`date --date=$YEAR-$M-01 +%b`
-    MONTHS=$MONTHS' '$MONTH
+    MONTH=`date --date=$YEAR-$m-01 +%b`
+    MONTHS[$m]=$MONTH
 done
 
 if [ $ONLY_SUMMARY -eq 1 ]
 then
     printf "\n"
     printf "    "
-    for DAY in $DAYS
+    for d in {1..7}
     do
-        printf "%1s" `echo "$DAY" | cut -c -1`
+        printf "%1s" `echo "${DAYS[$d]}" | cut -c -1`
     done
     printf " "
-    for MONTH in $MONTHS
+    for m in {1..12}
     do
-        printf "%1s" `echo "$MONTH" | cut -c -1`
+        printf "%1s" `echo "${MONTHS[$m]}" | cut -c -1`
     done
     printf "\n"
 
@@ -114,16 +114,16 @@ then
     do
         printf "%3s " $VEID
 
-        for DAY in $DAYS
+        for d in {1..7}
         do
-            [[ -e $VEID-$DAY.tar.gz ]] && printf "▣" || printf "□"
+            [[ -e $VEID-${DAYS[$d]}.tar.gz ]] && printf "▣" || printf "□"
         done
 
         printf " "
 
-        for MONTH in $MONTHS
+        for m in {1..12}
         do
-            [[ -e $VEID-$YEAR-$MONTH.tar.gz ]] && printf "▣" || printf "□"
+            [[ -e $VEID-$YEAR-${MONTHS[$m]}.tar.gz ]] && printf "▣" || printf "□"
         done
         printf "\n"
     done
@@ -134,8 +134,9 @@ if [ $ONLY_SUMMARY -eq 0 ]
 then
     printf "\n"
     printf "      "
-    for DAY in $DAYS
+    for d in {1..7}
     do
+      DAY=${DAYS[$d]}
       [ $DAY = 'mié' ] && DAY=mie
       [ $DAY = 'sáb' ] && DAY=sab
 
@@ -149,9 +150,6 @@ TOTAL_TOTAL=0
 TOTAL_DAYS=0
 TOTAL_MONTHS=0
 
-declare -A TOTAL_DAY
-declare -A TOTAL_MONTH
-
 for VEID in $VEIDS
 do
     TOTAL_VEID=0
@@ -161,7 +159,7 @@ do
         printf "%s | " $VEID
     fi
 
-    for DAY in $DAYS
+    for d in {1..7}
     do
         while read p x o g BYTES M D t f
         do
@@ -175,7 +173,7 @@ do
                     let "GB = $MB / 1024"
                     TOTAL_VEID=$[$TOTAL_VEID+$MB]
                     TOTAL_TOTAL=$[$TOTAL_TOTAL+$MB]
-                    TOTAL_DAY[$DAY]=$[${TOTAL_DAY[$DAY]}+$MB]
+                    TOTAL_DAY[$d]=$[${TOTAL_DAY[$d]}+$MB]
                     TOTAL_DAYS=$[$TOTAL_DAYS+$MB]
                     SIZE=$MB
 
@@ -197,7 +195,7 @@ do
             then
                 printf "%2s %3s %8s | " "$D" "$M" "$SIZE"
             fi
-        done <<< `egrep "$VEID-$DAY" $TMP`
+        done <<< `egrep "$VEID-${DAYS[$d]}" $TMP`
     done
 
     if [ $ONLY_SUMMARY -eq 0 ]
@@ -214,10 +212,10 @@ then
     printf '      '
 fi
 
-for DAY in $DAYS
+for d in {1..7}
 do
     SIZE=' '
-    MB=${TOTAL_DAY[$DAY]}
+    MB=${TOTAL_DAY[$d]}
 
     if [ -z $MB ]
     then
@@ -258,9 +256,9 @@ if [ $ONLY_SUMMARY -eq 0 ]
 then
     printf "\n"
     printf "    "
-    for MONTH in $MONTHS
+    for m in {1..12}
     do
-        printf "%8s " $MONTH
+        printf "%8s " ${MONTHS[$m]}
     done
     printf "%8s \n" total
     printf ""
@@ -276,7 +274,7 @@ do
         printf "%s " $VEID
     fi
 
-    for MONTH in $MONTHS
+    for m in {1..12}
     do
         while read p x o g BYTES M D t f
         do
@@ -292,7 +290,7 @@ do
                     GB=`echo "$MB" | awk '{printf "%5d",$1/1024}'`
                     TOTAL_VEID=$[$TOTAL_VEID+$MB]
                     TOTAL_TOTAL=$[$TOTAL_TOTAL+$MB]
-                    TOTAL_MONTH[$MONTH]=$[${TOTAL_MONTH[$MONTH]}+$MB]
+                    TOTAL_MONTH[$m]=$[${TOTAL_MONTH[$m]}+$MB]
                     TOTAL_MONTHS=$[$TOTAL_MONTHS+$MB]
                     SIZE=$MB
 
@@ -314,7 +312,7 @@ do
             then
                 printf "%s " "$SIZE"
             fi
-        done <<< `egrep $VEID-$YEAR-$MONTH $TMP`
+        done <<< `egrep $VEID-$YEAR-${MONTHS[$m]} $TMP`
     done
 
     if [ $ONLY_SUMMARY -eq 0 ]
@@ -331,9 +329,9 @@ then
     printf "    "
 fi
 
-for MONTH in $MONTHS
+for m in {1..12}
 do
-    MB=${TOTAL_MONTH[$MONTH]}
+    MB=${TOTAL_MONTH[$m]}
 
     if [ -z $MB ]
     then
