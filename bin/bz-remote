@@ -42,7 +42,9 @@ LOG=$BAK_DIR/bz-remote.log
 MAIL_TO='root@localhost'
 ONLY_VEIDS=''
 OVEIDS='.only_veids.tmp'
-REMOTE_DIR=/mnt/plan-b/$LOCAL_HOST/bzdump
+REMOTE_ROOT_DIR=/mnt/plan-b
+REMOTE_DIR=$REMOTE_ROOT_DIR/$LOCAL_HOST/bzdump
+REMOTE_LOG=$REMOTE_ROOT_DIR/bz-remote.log
 REMOTE_HOST=backup
 REMOTE_PORT=''
 REMOTE_SUDO=0
@@ -258,9 +260,17 @@ do
     REMOTE_TAR=${REMOTE_VEID}-${NAME}.tar.gz 
     REMOTE_TAR_TMP=$REMOTE_TAR.tmp
     TAR_REMOTE_VEID="--numeric-owner -C ${REMOTE_VEID} ./"
-    TAR="$RSUDO $TAR_BIN czf $REMOTE_TAR_TMP $TAR_REMOTE_VEID"
-    TAR=$TAR" && $RSUDO mv $REMOTE_TAR_TMP $REMOTE_TAR"
     TAR_LOG=$REMOTE_DIR/$VEID.log
+
+    TAR="
+    S=\`date +%s\`
+    DS=\`date +%F\ %T\`
+    $RSUDO $TAR_BIN czf $REMOTE_TAR_TMP $TAR_REMOTE_VEID \
+    >$TAR_LOG 2>&1 && $RSUDO mv $REMOTE_TAR_TMP $REMOTE_TAR
+    E=\`date +%s\`
+    DE=\`date +%F\ %T\`
+    T=\`expr \$E - \$S\`
+    echo $VEID \"\$DS \$DE \$T\" $REMOTE_TAR >> $REMOTE_LOG"
 
     TAR_TMP=/tmp/bz-remote-$VEID-tar.sh
     e "$VEID generate script: $TAR_TMP"
@@ -278,7 +288,7 @@ do
         echo "$RSUDO md5sum $TAR_MONTH >> $REMOTE_MD5" >>$TAR_TMP
     fi
 
-    echo "$TAR >$TAR_LOG 2>&1" >>$TAR_TMP
+    echo "$TAR" >> $TAR_TMP
 
     if [ $TOMORROW -eq 1 ]
     then
@@ -305,7 +315,7 @@ e "end bz-remote $NAME from $LOCAL_HOST for VMs $IDS"
 
 TOTAL_END=`date +%s`
 TOTAL_TOTAL=`expr $TOTAL_END - $TOTAL_START`
-MAIL_SUBJECT="$NOW bz-remote $LOCAL_HOST in $TOTAL_TOTAL seconds"
+MAIL_SUBJECT="$NOW bz-remote $LOCAL_HOST -> $REMOTE_HOST in $TOTAL_TOTAL seconds"
 e "total time: $TOTAL_TOTAL"
 grep "$TODAY.*total rsync: " $LOG | cut -d' ' -f8,5 | barra  > $TMP
 e "" >$TMP
