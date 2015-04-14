@@ -1,0 +1,129 @@
+#!/bin/bash
+
+# This script comes with ABSOLUTELY NO WARRANTY, use at own risk
+# Copyright (C) 2015 Osiris Alejandro Gomez <osiris@gcoop.coop>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>
+
+LOCAL_HOST=`hostname`
+LOG=/mnt/plan-b/$LOCAL_HOST/bzdump/bz-remote.log
+VEIDS=/tmp/veids.tmp
+DATES=/tmp/dates.tmp
+
+while getopts "f:sv" OPTION
+do
+  case $OPTION in
+    f)
+      LOG="$OPTARG"
+    ;;
+    s)
+      ONLY_SUMMARY=1
+    ;;
+    v)
+      VERBOSE=1
+    ;;
+  esac
+done
+
+[[ ! -e "$LOG" ]] && exit 1
+
+awk '{print $1}' "$LOG" | sort -u >$VEIDS
+awk '{print $2}' "$LOG" | sort -u >$DATES
+
+bar ()
+{
+	t=$2
+	n=$1
+	p=`echo "scale=2;($n/$t)*100" | bc`
+	i=`echo $p | cut -d\. -f1`
+	m=$(($i/2))
+
+	if [ $i -lt 2 ]
+	then
+		printf '▌'
+		exit
+	fi
+
+	for ((i=1; i<=$m; i++))
+	do
+		printf '█'
+	done
+}
+
+to_hhmmss ()
+{
+    date -d "1970-01-01 $1 seconds" +%H:%M:%S
+}
+
+to_seconds ()
+{
+    IFS=: read h m s <<< "$1"
+    echo $(( 10#$h * 3600 + 10#$m * 60 + 10#$s ))
+}
+
+> fix
+
+while read DATE
+do
+	printf "\n"
+
+	total=0
+	while read VEID
+	do
+		while read v ds hs de he t f z
+		do
+            echo "$t" | grep : >/dev/null
+            OK=`echo $?`
+            if [ $OK -eq 0 ]
+            then
+                s=`to_seconds $t`
+                total=$[$total+$s]
+                se=`to_seconds $he`
+                ss=`to_seconds $hs`
+                ts=$(($se-$ss))
+                if [ ! "$ts" -eq "$s" ]
+                then
+                    echo $v $ds $hs $de $he `to_hhmmss $ts` $f $z >>fix
+                else
+                    echo $v $ds $hs $de $he $t $f $z >>fix
+                fi
+            else
+                echo $v $ds $hs $de $he `to_hhmmss $t` $f $z >>fix
+            fi
+		done <<< `egrep "$VEID $DATE" $LOG`
+	done < $VEIDS
+
+	printf "%s %8s\n" $DATE `to_hhmmss $total`
+	while read VEID
+	do
+		while read v ds hs de he t f z
+		do
+            echo "$t" | grep : >/dev/null
+            OK=`echo $?`
+            if [ $OK -eq 0 ]
+            then
+                s=`to_seconds $t`
+                if [ $s -ne 0 ]
+                then
+                {
+                    b=`bar $s $total`
+                    p=`echo "scale=2;($s/$total)*100" | bc | cut -d. -f1`
+                    printf "%10s %s %2d %s %s %s\n" $VEID $t $p '%' $b
+                }
+                fi
+            fi
+		done <<< `egrep "$VEID $DATE" $LOG`
+	done < $VEIDS
+done < $DATES
+

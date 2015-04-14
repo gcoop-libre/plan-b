@@ -44,7 +44,7 @@ ONLY_VEIDS=''
 OVEIDS='.only_veids.tmp'
 REMOTE_ROOT_DIR=/mnt/plan-b
 REMOTE_DIR=$REMOTE_ROOT_DIR/$LOCAL_HOST/bzdump
-REMOTE_LOG=$REMOTE_ROOT_DIR/bz-remote.log
+REMOTE_LOG=$REMOTE_DIR/bz-remote.log
 REMOTE_HOST=backup
 REMOTE_PORT=''
 REMOTE_SUDO=0
@@ -270,9 +270,11 @@ do
     E=\`date +%s\`
     DE=\`date +%F\ %T\`
     T=\`expr \$E - \$S\`
-    H=`date -d \"1970-01-01 \$T seconds\" +%H:%M:%S`
-    Z=`ls -lh $REMOTE_TAR | awk '{print \$5}'`
-    echo \"\$DS \$DE \$H \$Z\" $REMOTE_TAR >> $REMOTE_LOG"
+    H=\`date -d \"1970-01-01 \$T seconds\" +%H:%M:%S\`
+    Z=\`ls -l $REMOTE_TAR | awk '{print \$5}'\`
+    V=\"$VEID\"
+    F=\"$REMOTE_TAR\"
+    echo \"\$V \$DS \$DE \$H \$F \$Z\" >> $REMOTE_LOG"
 
     TAR_TMP=/tmp/bz-remote-$VEID-tar.sh
     e "$VEID generate script: $TAR_TMP"
