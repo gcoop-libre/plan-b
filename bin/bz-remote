@@ -334,7 +334,7 @@ fi
 
 MAIL_SUBJECT="$NOW bz-remote $LOCAL_HOST -> $REMOTE_HOST $TIME $ERROR"
 
-grep "$TODAY.*total rsync: " $LOG | cut -d' ' -f8,5 | barra  > $TMP
+grep "$TODAY.*total rsync: " $LOG | awk '{print $8,$5}' | barra  > $TMP
 e "" >>$TMP
 
 $SSH_REMOTE "bz-du -d $REMOTE_DIR" >>$TMP
