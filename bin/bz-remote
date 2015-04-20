@@ -324,7 +324,7 @@ TIME="in $TOTAL_TOTAL seconds"
 
 e "total time: $TOTAL_TOTAL"
 
-if [ $TOTAL_ERRORS -eq 0 ]
+if [ $TOTAL_ERRORS -ne 0 ]
 then
     ERROR="[$TOTAL_ERRORS ERRORS]"
     e "total errors: $ERROR"
@@ -338,6 +338,8 @@ grep "$TODAY.*total rsync: " $LOG | cut -d' ' -f8,5 | barra  > $TMP
 e "" >>$TMP
 
 $SSH_REMOTE "bz-du -d $REMOTE_DIR" >>$TMP
+$SSH_REMOTE "bz-time -f $REMOTE_LOG" >>$TMP
+
 if [ $SEND_MAIL -eq 1 ]
 then
   mail "$MAIL_TO" -s "$MAIL_SUBJECT" < $TMP
