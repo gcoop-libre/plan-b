@@ -21,9 +21,12 @@ LOG=/mnt/plan-b/$LOCAL_HOST/bzdump/bz-remote.log
 VEIDS=/tmp/veids.tmp
 DATES=/tmp/dates.tmp
 
-while getopts "f:sv" OPTION
+while getopts "d:f:sv" OPTION
 do
   case $OPTION in
+    d)
+      DATE="$OPTARG"
+    ;;
     f)
       LOG="$OPTARG"
     ;;
@@ -39,7 +42,14 @@ done
 [[ ! -e "$LOG" ]] && exit 1
 
 awk '{print $1}' "$LOG" | sort -u >$VEIDS
-awk '{print $2}' "$LOG" | sort -u >$DATES
+
+if [ -z "$DATE" ]
+then
+	awk '{print $2}' "$LOG" | sort -u >$DATES
+else
+
+	echo "$DATE" >$DATES
+fi
 
 bar ()
 {
@@ -119,7 +129,7 @@ do
                 {
                     b=`bar $s $total`
                     p=`echo "scale=2;($s/$total)*100" | bc | cut -d. -f1`
-                    printf "%10s %s %2d %s %s %s\n" $VEID $t $p '%' $b
+                    printf "%10s %s %2d %s %s %s %s %s\n" $VEID $t $p '%' $hs $he $b
                 }
                 fi
             fi
