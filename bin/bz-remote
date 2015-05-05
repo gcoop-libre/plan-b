@@ -276,7 +276,7 @@ do
     F=\"$REMOTE_TAR\"
     echo \"\$V \$DS \$DE \$H \$F \$Z\" >> $REMOTE_LOG"
 
-    TAR_TMP=/tmp/bz-remote-$REMOTE_HOST-$VEID-tar.sh
+    TAR_TMP=/tmp/bz-remote-$LOCAL_HOST-$VEID-tar.sh
     e "$VEID generate script: $TAR_TMP"
     echo "#!/bin/bash" >$TAR_TMP
 
