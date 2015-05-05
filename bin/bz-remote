@@ -303,7 +303,7 @@ do
     fi
 
     echo "$RSUDO md5sum $REMOTE_TAR >> $REMOTE_MD5" >>$TAR_TMP
-    chmod +x $TAR_TMP
+    chmod +x "$TAR_TMP"
 
     e "$VEID copy script: $TAR_TMP"
     $RSYNC_BIN $RSYNC_SSH $TAR_TMP $REMOTE_HOST:$TAR_TMP 
@@ -318,13 +318,13 @@ done
 e "end bz-remote $NAME from $LOCAL_HOST for VMs $IDS"
 
 TOTAL_END=`date +%s`
-TOTAL_TOTAL=`expr $TOTAL_END - $TOTAL_START`
-TOTAL_ERRORS=`grep "$TODAY.*rsync error" $LOG | wc -l`
+TOTAL_TOTAL=`expr "$TOTAL_END" - "$TOTAL_START"`
+TOTAL_ERRORS=`grep -c "$TODAY.*rsync error" $LOG`
 TIME="in $TOTAL_TOTAL seconds"
 
 e "total time: $TOTAL_TOTAL"
 
-if [ $TOTAL_ERRORS -ne 0 ]
+if [ "$TOTAL_ERRORS" -ne 0 ]
 then
     ERROR="[$TOTAL_ERRORS ERRORS]"
     e "total errors: $ERROR"
@@ -338,7 +338,8 @@ grep "$TODAY.*total rsync: " $LOG | awk '{print $8,$5}' | barra  > $TMP
 e "" >>$TMP
 
 $SSH_REMOTE "bz-du -d $REMOTE_DIR" >>$TMP
-$SSH_REMOTE "bz-time -f $REMOTE_LOG" >>$TMP
+LAST_DATE=`date --date="yesterday" +%Y-%m-%d`
+$SSH_REMOTE "bz-time -d $LAST_DATE -f $REMOTE_LOG" >>$TMP
 
 if [ $SEND_MAIL -eq 1 ]
 then
