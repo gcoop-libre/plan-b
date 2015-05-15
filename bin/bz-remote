@@ -271,10 +271,12 @@ do
     DE=\`date +%F\ %T\`
     T=\`expr \$E - \$S\`
     H=\`date -d \"1970-01-01 \$T seconds\" +%H:%M:%S\`
+    DU=\`du -bsc $REMOTE_VEID | grep total | awk '{print \$1}'\`
     Z=\`ls -l $REMOTE_TAR | awk '{print \$5}'\`
+    R=\`echo \$DU \$Z | awk '{printf \"%0.2f\n\",\$1/\$2}'\`
     V=\"$VEID\"
     F=\"$REMOTE_TAR\"
-    echo \"\$V \$DS \$DE \$H \$F \$Z\" >> $REMOTE_LOG"
+    echo \"\$V \$DS \$DE \$H \$F \$DU \$Z \$R\" >> $REMOTE_LOG"
 
     TAR_TMP=/tmp/bz-remote-$LOCAL_HOST-$VEID-tar.sh
     e "$VEID generate script: $TAR_TMP"
