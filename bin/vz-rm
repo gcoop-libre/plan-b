@@ -17,11 +17,12 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 ONLY_SUMMARY=0
+ONLY_LAST=0
 VERBOSE=0
 DELETE=0
 DIR=$PWD
 
-while getopts "Dd:sv" OPTION
+while getopts "Dd:lsv" OPTION
 do
   case $OPTION in
     D)
@@ -29,6 +30,9 @@ do
     ;;
     d)
       DIR=`echo $OPTARG | sed 's/\/\+$//g'`
+    ;;
+    l)
+      ONLY_LAST=1
     ;;
     s)
       ONLY_SUMMARY=1
@@ -72,14 +76,26 @@ YEARS=`cat $VLS  | awk '{print $9}' | egrep -o "[0-9]{4}" | sort -u`
 
 for VEID in $VEIDS
 do
+    if [ $ONLY_LAST -eq 0 ]
+    then
 
-  for MONTH in $MONTHS
-  do
-   FILE=$(cat $VLS | egrep $VEID-$MONTH | awk '{print $9}' | tail -1)
-   DATE=$(echo $FILE | egrep -o "[0-9]{4}_[0-9]{2}_[0-9]{2}" | cut -c 6-)
-   [[ -n $FILE ]] && echo $FILE >>$VOK
-  done
+      for MONTH in $MONTHS
+      do
+       FILE=$(cat $VLS | egrep $VEID-$MONTH | awk '{print $9}' | tail -1)
+       DATE=$(echo $FILE | egrep -o "[0-9]{4}_[0-9]{2}_[0-9]{2}" | cut -c 6-)
+       [[ -n $FILE ]] && echo $FILE >>$VOK
+      done
 
+    else
+      
+      for YEAR in $YEARS
+      do
+       FILE=$(cat $VLS | egrep $VEID-$YEAR | awk '{print $9}' | tail -1)
+       DATE=$(echo $FILE | egrep -o "[0-9]{4}_[0-9]{2}_[0-9]{2}" | cut -c 6-)
+       [[ -n $FILE ]] && echo $FILE >>$VOK
+      done
+
+    fi
 done
 
 TOTAL_VOK=`wc -l $VOK | awk '{print $1}'`
