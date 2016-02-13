@@ -252,7 +252,7 @@ do
   RSYNC_TOTAL=`expr $RSYNC_END - $RSYNC_START`
   e "$VEID total rsync: $RSYNC_TOTAL"
 
-  I=`echo $VEID | cut -c 2-3`
+  I=`echo $VEID | cut -c 2-3 | awk '{printf "%d",$1}'`
   M=$[$M+$I+20]
 
   if [ $OK -eq 0 ]
