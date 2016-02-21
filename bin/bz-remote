@@ -215,7 +215,8 @@ do
   REMOTE_VEID=${REMOTE_DIR}/${VEID}
   REMOTE_MD5=${REMOTE_DIR}'/md5.log'
   RSYNC_EXCLUDE='--exclude='$VEID'/usr/portage --exclude='$VEID'/no-backup'
-  RSYNC_LOG='--log-file='$BAK_DIR'/bz-remote-rsync-'$VEID'.log'
+  RSYNC_LFILE=$BAK_DIR'/bz-remote-'$REMOTE_HOST'-rsync-'$VEID'.log'
+  RSYNC_LOG='--log-file='$RSYNC_LFILE
   RSYNC_OPTIONS=$RSYNC_OPTIONS' '$RSYNC_LOG
   RSYNC_REMOTE=${REMOTE_HOST}:${REMOTE_VEID}/
   HOUR=`date +%-H`
@@ -330,6 +331,8 @@ if [ "$TOTAL_ERRORS" -ne 0 ]
 then
     ERROR="[$TOTAL_ERRORS ERRORS]"
     e "total errors: $ERROR"
+    RSYNC_LDATE=`date +%Y/%m/%d`
+    egrep -C3 ".*$RSYNC_LDATE.*rsync error:" "$RSYNC_LFILE" >>"$LOG"
 else
     ERROR=''
 fi
