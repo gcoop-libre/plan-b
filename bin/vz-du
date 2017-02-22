@@ -38,7 +38,7 @@ cd $DIR
 TMP=/tmp/vz-du-$BASHPID.tmp
 
 # EXAMPLE: vzdump-openvz-118-2014_10_18-01_03_08.tar
-PATTERN='vzdump-(openvz|qemu)-[0-9]{3}-[0-9]{4}_[0-9]{2}_[0-9]{2}-[0-9]{2}_[0-9]{2}_[0-9]{2}.(tar|vma|tar.gz)'
+PATTERN='vzdump-(openvz|qemu)-[0-9]{3}-[0-9]{4}_[0-9]{2}_[0-9]{2}-[0-9]{2}_[0-9]{2}_[0-9]{2}.(tar|vma|tar.gz|tgz)'
 ls -l * 2>/dev/null | egrep "$PATTERN" > $TMP
 
 TOTAL_TAR=`wc -l $TMP | awk '{print $1}'`
